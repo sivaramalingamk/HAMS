@@ -1,3 +1,26 @@
 .App {
-  /* Default App styles can go here */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.global-footer {
+  margin-top: auto;
+  background-color: #561d36;
+  color: #ffffff;
+  text-align: center;
+  padding: 20px;
+  border-top: 1px solid #421428;
+  font-size: 0.85rem;
+}
+
+.global-footer p {
+  margin: 5px 0;
+}
+
+/* Hide footer during print */
+@media print {
+  .global-footer {
+    display: none;
+  }
 }

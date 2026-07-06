@@ -36,7 +36,7 @@ exports.submitApplication = async (req, res) => {
     }
 
     const appId = 'APP' + Math.floor(1000 + Math.random() * 9000); // Mock ID generator
-    
+
     // Convert current date to YYYY-MM-DD
     // Get current date and time in YYYY-MM-DD HH:MM:SS format for MySQL
     const date = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -49,9 +49,10 @@ exports.submitApplication = async (req, res) => {
     // If a bed was selected, update its status
     if (data.roomSelection && data.roomSelection.roomId && data.roomSelection.bedId) {
       try {
+        const hostelType = data.sex || 'Male';
         await pool.execute(
-          'UPDATE beds SET status = ?, studentId = ? WHERE roomId = ? AND bedId = ?',
-          ['booked', data.enrolmentNo, data.roomSelection.roomId, data.roomSelection.bedId]
+          'UPDATE beds SET status = ?, studentId = ? WHERE roomId = ? AND bedId = ? AND hostelType = ?',
+          ['booked', data.enrolmentNo, data.roomSelection.roomId, data.roomSelection.bedId, hostelType]
         );
       } catch (bedError) {
         console.error('Error updating bed status:', bedError.message);
@@ -76,6 +77,40 @@ exports.getAllApplications = async (req, res) => {
   }
 };
 
+exports.getApprovedStudents = async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        a.admissionNo as id, 
+        a.studentName as name, 
+        DATE_FORMAT(a.date, '%Y-%m-%d') as joined,
+        JSON_UNQUOTE(JSON_EXTRACT(a.formData, '$.sex')) as gender,
+        JSON_UNQUOTE(JSON_EXTRACT(a.formData, '$.handPhone')) as contact,
+        b.roomId as room,
+        b.bedId as bed
+      FROM applications a
+      LEFT JOIN beds b ON a.admissionNo = b.studentId
+      WHERE a.status = 'Approved'
+      ORDER BY a.date DESC
+    `;
+    const [rows] = await pool.query(query);
+    
+    // Fallback for formData if needed
+    const formattedData = rows.map(row => ({
+      ...row,
+      gender: row.gender || 'Unknown',
+      contact: row.contact || 'N/A',
+      room: row.room || 'N/A',
+      bed: row.bed || 'N/A'
+    }));
+
+    res.status(200).json({ success: true, data: formattedData });
+  } catch (error) {
+    console.error('Error fetching approved students:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.updateStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -90,7 +125,7 @@ exports.updateStatus = async (req, res) => {
     }
 
     const [result] = await pool.execute(query, params);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
@@ -109,7 +144,7 @@ exports.updateStatus = async (req, res) => {
           title = 'Application Rejected';
           message = `We regret to inform you that your hostel application (${id}) has been rejected.`;
         }
-        
+
         if (title) {
           await pool.execute(
             'INSERT INTO notifications (user_email, title, message) VALUES (?, ?, ?)',
@@ -146,6 +181,51 @@ exports.getStudentApplicationStatus = async (req, res) => {
     res.status(200).json({ success: true, data: rows[0] });
   } catch (error) {
     console.error('Error fetching student status:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.updateStudentApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+
+    // Check if application exists and is pending
+    const [existingApps] = await pool.query('SELECT * FROM applications WHERE id = ?', [id]);
+
+    if (existingApps.length === 0) {
+      return res.status(404).json({ success: false, message: 'Application not found' });
+    }
+
+    if (existingApps[0].status !== 'Rejected') {
+      return res.status(400).json({ success: false, message: 'Only rejected applications can be updated and re-submitted.' });
+    }
+
+    // Update application in DB and change status back to Pending
+    await pool.execute(
+      'UPDATE applications SET formData = ?, studentName = ?, admissionNo = ?, status = "Pending" WHERE id = ?',
+      [JSON.stringify(data), data.nameWithInitial, data.enrolmentNo, id]
+    );
+
+    // If a bed was selected, update its status
+    if (data.roomSelection && data.roomSelection.roomId && data.roomSelection.bedId) {
+      try {
+        // Clear previous booking if any for this student
+        await pool.execute('UPDATE beds SET status = "available", studentId = NULL WHERE studentId = ?', [data.enrolmentNo]);
+
+        const hostelType = data.sex || 'Male';
+        await pool.execute(
+          'UPDATE beds SET status = ?, studentId = ? WHERE roomId = ? AND bedId = ? AND hostelType = ?',
+          ['booked', data.enrolmentNo, data.roomSelection.roomId, data.roomSelection.bedId, hostelType]
+        );
+      } catch (bedError) {
+        console.error('Error updating bed status:', bedError.message);
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Application updated successfully' });
+  } catch (error) {
+    console.error('Error updating student application:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };

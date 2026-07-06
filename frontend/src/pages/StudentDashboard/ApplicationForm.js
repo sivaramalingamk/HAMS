@@ -38,11 +38,29 @@ const ApplicationForm = () => {
 
   const [photoPreview, setPhotoPreview] = useState(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-  
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState('');
+
   const [signaturePreview, setSignaturePreview] = useState(null);
   const [signatureError, setSignatureError] = useState('');
   const [isUploadingSignature, setIsUploadingSignature] = useState(false);
-  
+
+  const [existingAppId, setExistingAppId] = useState(null);
+  const [appStatus, setAppStatus] = useState(null);
+  const [loadingExisting, setLoadingExisting] = useState(true);
+
+  const districtsByProvince = {
+    "Central Province": ["Kandy", "Matale", "Nuwara Eliya"],
+    "Eastern Province": ["Ampara", "Batticaloa", "Trincomalee"],
+    "North Central Province": ["Anuradhapura", "Polonnaruwa"],
+    "Northern Province": ["Jaffna", "Kilinochchi", "Mannar", "Mullaitivu", "Vavuniya"],
+    "North Western Province": ["Kurunegala", "Puttalam"],
+    "Sabaragamuwa Province": ["Kegalle", "Ratnapura"],
+    "Southern Province": ["Galle", "Hambantota", "Matara"],
+    "Uva Province": ["Badulla", "Moneragala"],
+    "Western Province": ["Colombo", "Gampaha", "Kalutara"]
+  };
+
   // Pre-fill student data from login session
   React.useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -62,7 +80,7 @@ const ApplicationForm = () => {
       setFormData(prev => ({
         ...prev,
         email: user.email || '',
-        nameWithInitial: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : prev.nameWithInitial,
+        nameWithInitial: prev.nameWithInitial,
         enrolmentNo: autoEnrolmentNo,
         sex: user.gender || prev.sex,
         dob: user.birthday ? new Date(user.birthday).toISOString().split('T')[0] : prev.dob,
@@ -72,11 +90,67 @@ const ApplicationForm = () => {
     }
   }, []);
 
+  React.useEffect(() => {
+    const fetchExistingApplication = async () => {
+      const userStr = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+      if (userStr && token) {
+        const user = JSON.parse(userStr);
+        try {
+          const res = await fetch(`${API_BASE_URL}/applications/student/${user.email}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success && data.data) {
+            setExistingAppId(data.data.id);
+            setAppStatus(data.data.status);
+            if (data.data.status === 'Rejected') {
+              let parsedForm = typeof data.data.formData === 'string' ? JSON.parse(data.data.formData) : data.data.formData;
+              setFormData(prev => ({ ...prev, ...parsedForm }));
+              if (parsedForm.roomSelection && parsedForm.roomSelection.roomId) {
+                setSelectedRoomId(parsedForm.roomSelection.roomId.toString());
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to check existing application:", err);
+        }
+      }
+      setLoadingExisting(false);
+    };
+
+    fetchExistingApplication();
+  }, []);
+
+  React.useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const gender = formData.sex || 'Male'; // Fallback to male
+        const response = await fetch(`${API_BASE_URL}/rooms/available?gender=${gender}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+          setAvailableRooms(data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch available rooms:", err);
+      }
+    };
+    if (formData.sex) {
+      fetchRooms();
+    } else {
+      // If sex is not selected yet, still fetch default or clear
+      fetchRooms();
+    }
+  }, [formData.sex]);
+
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setPhotoPreview(URL.createObjectURL(file));
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setFormData(prev => ({ ...prev, photo: reader.result }));
@@ -115,8 +189,8 @@ const ApplicationForm = () => {
             const distanceKm = (distanceMeters / 1000).toFixed(2);
             const durationMinutes = Math.round(durationSeconds / 60);
 
-            setFormData(prev => ({ 
-              ...prev, 
+            setFormData(prev => ({
+              ...prev,
               distance: distanceKm,
               travelTime: durationMinutes,
               userLocation: { lat: studentLat, lon: studentLon }
@@ -161,7 +235,8 @@ const ApplicationForm = () => {
 
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : finalValue
+      [name]: type === 'checkbox' ? checked : finalValue,
+      ...(name === 'province' && { district: '' })
     });
   };
 
@@ -226,12 +301,25 @@ const ApplicationForm = () => {
     }
 
     const finalData = { ...formData };
-    
+
+    if (selectedRoomId) {
+      const room = availableRooms.find(r => r.id.toString() === selectedRoomId.toString());
+      if (room && room.beds.length > 0) {
+        finalData.roomSelection = {
+          roomId: room.id,
+          bedId: room.beds[0].bedId
+        };
+      }
+    }
+
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/applications`, {
-        method: 'POST',
-        headers: { 
+      const endpoint = existingAppId ? `${API_BASE_URL}/applications/student/${existingAppId}` : `${API_BASE_URL}/applications`;
+      const method = existingAppId ? 'PUT' : 'POST';
+
+      const response = await fetch(endpoint, {
+        method: method,
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -239,18 +327,51 @@ const ApplicationForm = () => {
       });
       const data = await response.json();
       if (data.success) {
-        alert('Application Submitted Successfully!');
-        // Ideally navigate to status or rooms
+        alert(existingAppId ? 'Application Updated Successfully!' : 'Application Submitted Successfully!');
+        navigate('/student/status');
       } else {
-        alert('Error submitting application: ' + data.message);
+        alert('Error processing application: ' + data.message);
       }
     } catch (err) {
       alert('Failed to connect to backend server.');
     }
   };
 
+  if (loadingExisting) {
+    return <div className="application-form-container"><p>Loading application data...</p></div>;
+  }
+
+  if (appStatus === 'Approved') {
+    return (
+      <div className="application-form-container">
+        <div className="status-card info" style={{ padding: '30px', textAlign: 'center', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '12px' }}>
+          <h2>Application Approved</h2>
+          <p>Your application has been <strong>Approved</strong>. You can no longer edit it.</p>
+          <button onClick={() => navigate('/student/status')} className="submit-btn primary" style={{ marginTop: '20px' }}>Go to Status Page</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (appStatus === 'Pending') {
+    return (
+      <div className="application-form-container">
+        <div className="status-card info" style={{ padding: '30px', textAlign: 'center', background: '#ebf8ff', border: '1px solid #90cdf4', borderRadius: '12px' }}>
+          <h2>Application Pending</h2>
+          <p>Your application is currently <strong>Pending</strong> review. You cannot edit it at this time.</p>
+          <button onClick={() => navigate('/student/status')} className="submit-btn primary" style={{ marginTop: '20px' }}>Go to Status Page</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="application-form-container">
+      {existingAppId && appStatus === 'Rejected' && (
+        <div className="distance-note" style={{ marginBottom: '20px', fontSize: '1.1em', padding: '15px', background: '#fff5f5', borderColor: '#feb2b2', color: '#c53030' }}>
+          ⚠️ Your previous application was rejected. Please review and update your details below to re-submit.
+        </div>
+      )}
       <div className="form-header">
         <div className="header-titles">
           <h3>University of Vavuniya</h3>
@@ -333,22 +454,22 @@ const ApplicationForm = () => {
 
         <div className="form-group full-width">
           <label>5. (a) University E-Mail Address:</label>
-          <input 
-            type="email" 
-            name="email" 
-            value={formData.email} 
-            onChange={handleChange} 
-            required 
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
           />
         </div>
 
         <div className="form-group full-width">
-          <label>&nbsp;&nbsp;&nbsp;&nbsp;(b) Private E-Mail Address (Optional):</label>
-          <input 
-            type="email" 
-            name="privateEmail" 
-            value={formData.privateEmail} 
-            onChange={handleChange} 
+          <label>&nbsp;&nbsp;&nbsp;&nbsp;(b) Personal E-Mail Address (Optional):</label>
+          <input
+            type="email"
+            name="privateEmail"
+            value={formData.privateEmail}
+            onChange={handleChange}
             placeholder="e.g. yourname@gmail.com"
           />
         </div>
@@ -378,33 +499,13 @@ const ApplicationForm = () => {
             </div>
             <div className="form-group half-width">
               <label>2. District:</label>
-              <select name="district" value={formData.district} onChange={handleChange} required>
+              <select name="district" value={formData.district} onChange={handleChange} required disabled={!formData.province}>
                 <option value="">Select District...</option>
-                <option value="Ampara">Ampara</option>
-                <option value="Anuradhapura">Anuradhapura</option>
-                <option value="Badulla">Badulla</option>
-                <option value="Batticaloa">Batticaloa</option>
-                <option value="Colombo">Colombo</option>
-                <option value="Galle">Galle</option>
-                <option value="Gampaha">Gampaha</option>
-                <option value="Hambantota">Hambantota</option>
-                <option value="Jaffna">Jaffna</option>
-                <option value="Kalutara">Kalutara</option>
-                <option value="Kandy">Kandy</option>
-                <option value="Kegalle">Kegalle</option>
-                <option value="Kilinochchi">Kilinochchi</option>
-                <option value="Kurunegala">Kurunegala</option>
-                <option value="Mannar">Mannar</option>
-                <option value="Matale">Matale</option>
-                <option value="Matara">Matara</option>
-                <option value="Moneragala">Moneragala</option>
-                <option value="Mullaitivu">Mullaitivu</option>
-                <option value="Nuwara Eliya">Nuwara Eliya</option>
-                <option value="Polonnaruwa">Polonnaruwa</option>
-                <option value="Puttalam">Puttalam</option>
-                <option value="Ratnapura">Ratnapura</option>
-                <option value="Trincomalee">Trincomalee</option>
-                <option value="Vavuniya">Vavuniya</option>
+                {formData.province && districtsByProvince[formData.province] ? (
+                  districtsByProvince[formData.province].map(dist => (
+                    <option key={dist} value={dist}>{dist}</option>
+                  ))
+                ) : null}
               </select>
             </div>
           </div>
@@ -441,9 +542,9 @@ const ApplicationForm = () => {
                 <div className="info-row">
                   <span className="info-label">Detected Coordinates</span>
                   <span className="info-value">{formData.userLocation.lat.toFixed(5)}, {formData.userLocation.lon.toFixed(5)}</span>
-                  <a 
-                    href={`https://www.google.com/maps?q=${formData.userLocation.lat},${formData.userLocation.lon}`} 
-                    target="_blank" 
+                  <a
+                    href={`https://www.google.com/maps?q=${formData.userLocation.lat},${formData.userLocation.lon}`}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="map-link-btn">
                     View on Map
@@ -493,6 +594,57 @@ const ApplicationForm = () => {
           </div>
         </div>
 
+        <div className="form-section room-selection-section">
+          <label className="section-title">Desired Room Selection (Optional)</label>
+          <div className="form-group full-width">
+            <label>Select a Room:</label>
+            {!formData.sex ? (
+              <div className="distance-note" style={{ color: '#c53030', backgroundColor: '#fff5f5', borderColor: '#feb2b2' }}>
+                Please select your sex in section 2(a) first to see available rooms.
+              </div>
+            ) : (
+              <div className="room-selection-wrapper">
+                <div style={{ marginBottom: '15px' }}>
+                  <div
+                    className={`room-block ${selectedRoomId === '' ? 'selected' : ''} ${formData.sex === 'Male' ? 'male-block' : 'female-block'}`}
+                    onClick={() => setSelectedRoomId('')}
+                    style={{ maxWidth: '200px' }}
+                  >
+                    <div className="room-id">Any Room</div>
+                    <div className="room-beds">No preference</div>
+                  </div>
+                </div>
+
+                {Object.entries(
+                  availableRooms.reduce((acc, room) => {
+                    const floorNum = Math.floor(room.id / 100);
+                    const floorName = floorNum === 1 ? 'Ground Floor' : floorNum === 2 ? '1st Floor' : floorNum === 3 ? '2nd Floor' : floorNum === 4 ? '3rd Floor' : `${floorNum - 1}th Floor`;
+                    if (!acc[floorName]) acc[floorName] = [];
+                    acc[floorName].push(room);
+                    return acc;
+                  }, {})
+                ).map(([floor, rooms]) => (
+                  <div key={floor} className="floor-section">
+                    <h4 className="floor-title">{floor}</h4>
+                    <div className="room-blocks-container" style={{ marginTop: '10px' }}>
+                      {rooms.map(room => (
+                        <div
+                          key={room.id}
+                          className={`room-block ${selectedRoomId === room.id.toString() ? 'selected' : ''} ${formData.sex === 'Male' ? 'male-block' : 'female-block'}`}
+                          onClick={() => setSelectedRoomId(room.id.toString())}
+                        >
+                          <div className="room-id">Room {room.id}</div>
+                          <div className="room-beds">{room.beds.length} available</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="form-section declaration-section">
           <label className="declaration">
             <input type="checkbox" name="declarationAccepted" checked={formData.declarationAccepted} onChange={handleChange} required />
@@ -511,10 +663,10 @@ const ApplicationForm = () => {
                 </div>
               ) : (
                 <div className="signature-upload-box">
-                  <input 
-                    type="file" 
-                    accept="image/jpeg, image/png" 
-                    onChange={handleSignatureUpload} 
+                  <input
+                    type="file"
+                    accept="image/jpeg, image/png"
+                    onChange={handleSignatureUpload}
                     id="signatureUpload"
                     style={{ display: 'none' }}
                   />
@@ -530,7 +682,9 @@ const ApplicationForm = () => {
         </div>
 
         <div className="form-actions">
-          <button type="submit" className="submit-btn primary">Submit Application</button>
+          <button type="submit" className="submit-btn primary">
+            {existingAppId && appStatus === 'Rejected' ? 'Re-submit Application' : 'Submit Application'}
+          </button>
         </div>
       </form>
     </div>

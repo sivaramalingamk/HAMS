@@ -21,6 +21,7 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const path = require('path');
 
 // Mount Routes
@@ -29,6 +30,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Serve static uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

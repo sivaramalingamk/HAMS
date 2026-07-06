@@ -1,13 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './AdminDashboard.css';
+import axios from 'axios';
 
 const StudentRecords = () => {
-  const [students] = useState([
-    { id: '2021asp01', name: 'Nisal Fonseka', room: '101', bed: 'A', joined: '2022-01-10', contact: '0712345678', gender: 'Male' },
-    { id: '2021asp02', name: 'Kasun Silva', room: '101', bed: 'B', joined: '2022-01-12', contact: '0776543210', gender: 'Male' },
-    { id: '2021vaw05', name: 'Hasini Perera', room: '205', bed: 'A', joined: '2022-01-14', contact: '0789876543', gender: 'Female' },
-    { id: '2021vaw08', name: 'John Doe', room: '104', bed: 'A', joined: '2023-10-18', contact: '0799876543', gender: 'Male' },
-  ]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+        const response = await axios.get('http://localhost:5000/api/applications/approved', config);
+        if (response.data.success) {
+          setStudents(response.data.data);
+        } else {
+          setError('Failed to fetch records');
+        }
+      } catch (err) {
+        console.error('Error fetching student records:', err);
+        setError('An error occurred while fetching data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStudents();
+  }, []);
 
   return (
     <div>
@@ -33,8 +52,11 @@ const StudentRecords = () => {
               </tr>
             </thead>
             <tbody>
-              {students.map(std => (
-                <tr key={std.id} className="table-row-interactive">
+              {loading && <tr><td colSpan="6" style={{ textAlign: 'center' }}>Loading...</td></tr>}
+              {error && <tr><td colSpan="6" style={{ textAlign: 'center', color: 'red' }}>{error}</td></tr>}
+              {!loading && !error && students.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center' }}>No approved students found.</td></tr>}
+              {!loading && !error && students.map((std, index) => (
+                <tr key={std.id || index} className="table-row-interactive">
                   <td><span className="mono-text">{std.id}</span></td>
                   <td>
                     <div className="student-name-cell">

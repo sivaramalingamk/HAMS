@@ -83,14 +83,6 @@ const StudentHome = () => {
                 <p>View the current status of your submitted applications.</p>
               </div>
             </div>
-
-            <div className="action-card" onClick={() => alert("Support Portal Integration Pending")}>
-              <div className="action-icon icon-green">💬</div>
-              <div className="action-text">
-                <h3>Get Help</h3>
-                <p>Contact administration or raise a maintenance request.</p>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -134,10 +126,14 @@ const StudentHome = () => {
             </div>
             <div className="info-content">
               <ul className="modern-list">
-                <li><span className="list-emoji">⏰</span> Return to hostel before 10:00 PM.</li>
-                <li><span className="list-emoji">👥</span> Visitors allowed strictly 4:00 PM - 6:00 PM.</li>
-                <li><span className="list-emoji">🚫</span> Subletting rooms is prohibited.</li>
+                <li><span className="list-emoji">⏰</span> Return to boys hostel before 9:00 PM and girls hostel 7.00 PM</li>
+                <li><span className="list-emoji">👥</span> Visitors not allowed .</li>
+                <li><span className="list-emoji">🗑️</span> Dispose waste only in designated bins.</li>
                 <li><span className="list-emoji">🧹</span> Maintain room cleanliness.</li>
+                <li><span className="list-emoji">🚭</span> Smoking, alcohol, and drugs are strictly prohibited.</li>
+                <li><span className="list-emoji">🪑</span> Do not damage or move hostel property without permission.</li>
+                <li><span className="list-emoji">🔧</span> Report any maintenance issues immediately.</li>
+                <li><span className="list-emoji">💡</span> Turn off lights, fans, and electrical items when leaving the room.</li>
               </ul>
             </div>
           </section>
@@ -162,8 +158,13 @@ const ApplicationStatus = () => {
 
       try {
         const user = JSON.parse(userStr);
+        const token = localStorage.getItem('token');
         console.log('🔍 Fetching status for:', user.email);
-        const response = await fetch(`${API_BASE_URL}/applications/student/${user.email}`);
+        const response = await fetch(`${API_BASE_URL}/applications/student/${user.email}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         const data = await response.json();
         
         if (data.success && data.data) {
@@ -201,6 +202,18 @@ const ApplicationStatus = () => {
     );
   }
 
+  // Parse formData safely
+  let parsedForm = {};
+  try {
+    parsedForm = typeof application.formData === 'string' ? JSON.parse(application.formData) : (application.formData || {});
+  } catch (e) {
+    console.error("Error parsing formData");
+  }
+
+  const selectedRoom = (application.adminData && application.adminData.roomNo) 
+                       || (parsedForm.roomSelection && parsedForm.roomSelection.roomId) 
+                       || 'Not Selected';
+
   return (
     <div className="dashboard-content status-page">
       <div className="status-header">
@@ -217,6 +230,20 @@ const ApplicationStatus = () => {
         <div className="status-body">
           <h3>Your Current Status: <span className="status-highlight">{status}</span></h3>
           
+          <div className="allocation-info" style={{ marginTop: '20px', marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #5b1434' }}>
+            <div className="info-item">
+               <label style={{ fontWeight: 'bold', color: '#4a5568' }}>
+                 {status === 'Approved' ? 'Allocated Room:' : 'Requested Room:'}
+               </label>
+               <span style={{ marginLeft: '10px', fontSize: '1.1em', color: '#2d3748' }}>
+                 {selectedRoom !== 'Not Selected' ? `Room ${selectedRoom}` : 'Not Selected'}
+                 {status === 'Pending' && selectedRoom !== 'Not Selected' && (
+                   <span style={{ color: '#c53030', fontSize: '0.85em', marginLeft: '10px', fontStyle: 'italic' }}>(Pending Admin Approval)</span>
+                 )}
+               </span>
+            </div>
+          </div>
+
           {status === 'Pending' && (
             <p className="status-info">
                We have received your application! Our administrative team is currently reviewing your details. 
@@ -236,12 +263,6 @@ const ApplicationStatus = () => {
                     <div className="info-item">
                        <label>Allocated Hostel/Place</label>
                        <span>{application.adminData.hostel}</span>
-                    </div>
-                  )}
-                  {application.adminData && application.adminData.roomNo && (
-                    <div className="info-item">
-                       <label>Room Number</label>
-                       <span>{application.adminData.roomNo}</span>
                     </div>
                   )}
                   <div className="info-item">
@@ -274,10 +295,34 @@ const StudentDashboard = () => {
         <div className="nav-brand">
           <span className="logo-icon">🏢</span> HAMS Student
         </div>
-        <ul className="nav-links">
+        <ul className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <li><Link to="/student/home">Home</Link></li>
-          <li><Link to="/student/apply">Apply</Link></li>
+          <li><Link to="/student/apply">Apply for Hostel</Link></li>
           <li><Link to="/student/status">Current Status</Link></li>
+          <li>
+            <button 
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+              }}
+              style={{
+                background: 'transparent',
+                border: '1px solid #fff',
+                color: '#fff',
+                padding: '6px 15px',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                transition: 'all 0.3s',
+                marginTop: '15px'
+              }}
+              onMouseOver={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#2b6cb0'; }}
+              onMouseOut={(e) => { e.target.style.background = 'transparent'; e.target.style.color = '#fff'; }}
+            >
+              Logout
+            </button>
+          </li>
         </ul>
       </nav>
 

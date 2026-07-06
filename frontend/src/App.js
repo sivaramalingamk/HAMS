@@ -72,6 +72,10 @@ function App() {
           />
 
         </Routes>
+        <footer className="global-footer">
+          <p>&copy; Hostel Accommodation Management System. University of Vavuniya.</p>
+          <p>All Rights Reserved.</p>
+        </footer>
       </div>
     </BrowserRouter>
   );

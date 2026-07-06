@@ -518,3 +518,136 @@
   from { opacity: 0; transform: translateY(-5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Room Selection Blocks */
+.room-blocks-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.room-block {
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.room-block:hover {
+  border-color: #cbd5e0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.room-block.selected {
+  border-color: #5b1434;
+  background: #fffafa;
+  box-shadow: 0 4px 12px rgba(91, 20, 52, 0.15);
+}
+
+.room-block.selected::before {
+  content: '✓';
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  color: #5b1434;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.room-id {
+  font-size: 18px;
+  font-weight: 800;
+  color: #2d3748;
+  margin-bottom: 5px;
+}
+
+.room-block.selected .room-id {
+  color: #5b1434;
+}
+
+.room-beds {
+  font-size: 13px;
+  font-weight: 600;
+  color: #718096;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.room-block.selected .room-beds {
+  background: #fceef3;
+  color: #8a2051;
+}
+
+/* Floor Sections */
+.floor-section {
+  margin-top: 25px;
+}
+
+.floor-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #718096;
+  margin: 0 0 10px 0;
+  border-bottom: 2px dashed #edf2f7;
+  padding-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Gender-specific Blocks */
+.male-block {
+  border-color: #90cdf4;
+  background-color: #ebf8ff;
+}
+.male-block.selected {
+  border-color: #2b6cb0;
+  background-color: #bee3f8;
+  box-shadow: 0 4px 12px rgba(43, 108, 176, 0.15);
+}
+.male-block.selected::before {
+  color: #2b6cb0;
+}
+.male-block .room-id {
+  color: #2c5282;
+}
+.male-block .room-beds {
+  background-color: #bee3f8;
+  color: #2b6cb0;
+}
+.male-block.selected .room-beds {
+  background-color: #90cdf4;
+  color: #2c5282;
+}
+
+.female-block {
+  border-color: #fbb6ce;
+  background-color: #fff5f7;
+}
+.female-block.selected {
+  border-color: #b83280;
+  background-color: #fed7e2;
+  box-shadow: 0 4px 12px rgba(184, 50, 128, 0.15);
+}
+.female-block.selected::before {
+  color: #b83280;
+}
+.female-block .room-id {
+  color: #702459;
+}
+.female-block .room-beds {
+  background-color: #fed7e2;
+  color: #b83280;
+}
+.female-block.selected .room-beds {
+  background-color: #fbb6ce;
+  color: #702459;
+}
